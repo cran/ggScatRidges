@@ -15,8 +15,15 @@ ggScatRidges(
   group = NULL,
   color = "lancet",
   ridges = TRUE,
-  size = 15,
-  draw = TRUE
+  base_size = 15,
+  size = 2,
+  pch = NULL,
+  draw = TRUE,
+  density_2d = TRUE,
+  legend = TRUE,
+  label = FALSE,
+  legend.title = NULL,
+  text = NULL
 )
 }
 \arguments{
@@ -40,9 +47,23 @@ ggScatRidges(
 
 \item{ridges}{The user can choose to plot, or not, the ridgelines. Default = TRUE.}
 
-\item{size}{The overall size of the text in the plot. Default = 15.}
+\item{base_size}{The overall size of the text in the plot. Default = 15.}
+
+\item{size}{The size of the dots in the plot. Default = 3}
+
+\item{pch}{The user can change the shape of the points by providing a vector length equal to the number of groups.}
 
 \item{draw}{If the user wants to directly draw the plot. Default = TRUE.}
+
+\item{density_2d}{If the user wants to add density contours around group of points on the plot. Default = TRUE.}
+
+\item{legend}{If the user wants to add or remove the legend. Default = TRUE.}
+
+\item{label}{If the user wants to add custom labels for each point. Default = FALSE}
+
+\item{legend.title}{The user can change the title of the legend if desired.}
+
+\item{text}{The user can give a vector to add labels or directly provide it as a fourth column from a dataframe.}
 }
 \value{
 A ggplot object if draw set to 'TRUE' otherwise a grob table is returned but set to invisible.
@@ -54,14 +75,16 @@ A ggplot object if draw set to 'TRUE' otherwise a grob table is returned but set
 # The following example is based on the iris dataset:
 
 ## Example 1
-ggScatRidges(x = iris$Sepal.Length, y = iris$Sepal.Width, group= iris$Species,
-             color = "lancet", ridges = TRUE, title = "plot iris",
-             xlab = "Sepal.Length", ylab = "Sepal.Width", size = 15, draw = TRUE)
+ggScatRidges(x = iris$Sepal.Length, y = iris$Sepal.Width, group = iris$Species,
+             color = "lancet", ridges = TRUE, title = "plot iris", legend.title = "Grouping",
+             xlab = "Sepal.Length", ylab = "Sepal.Width", base_size = 15, size = 2, 
+             draw = TRUE, density_2d = TRUE, legend = TRUE, label = FALSE, text = NULL)
 
 ## Example 2
-iris2 <- iris[,c(1,2,5)] ## The 1st column will be used as 'x', 2nd as 'y', and the 3rd as 'group'.
+iris2 <- iris[,c(1,2,5)] ## The three columns will respectively be used as 'x', 'y', and group.
 ggScatRidges(x = iris2, 
              color = "lancet", ridges = TRUE, title = "plot iris",
-             xlab = "Sepal.Length", ylab = "Sepal.Width", size = 15, draw = TRUE) 
+             xlab = "Sepal.Length", ylab = "Sepal.Width", size = 2, draw = TRUE,
+             density_2d = FALSE, legend = TRUE, label = FALSE) 
 
 }

@@ -12,8 +12,16 @@
 #' @param group The user should provide here the grouping of the rows if a dataframe was provided, otherwise a vector.
 #' @param color The user can choose from `ggpubr::get_palette`. Default = "lancet".
 #' @param ridges The user can choose to plot, or not, the ridgelines. Default = TRUE.
-#' @param size The overall size of the text in the plot. Default = 15.
+#' @param base_size The overall size of the text in the plot. Default = 15.
+#' @param size The size of the dots in the plot. Default = 3
+#' @param pch The user can change the shape of the points by providing a vector length equal to the number of groups.
 #' @param draw If the user wants to directly draw the plot. Default = TRUE.
+#' @param density_2d If the user wants to add density contours around group of points on the plot. Default = TRUE.
+#' @param legend If the user wants to add or remove the legend. Default = TRUE.
+#' @param legend.title The user can change the title of the legend if desired.
+#' @param label If the user wants to add custom labels for each point. Default = FALSE
+#' @param text The user can give a vector to add labels or directly provide it as a fourth column from a dataframe.
+#'
 #'
 #' @return A ggplot object if draw set to 'TRUE' otherwise a grob table is returned but set to invisible.
 #'
@@ -21,15 +29,17 @@
 #' # The following example is based on the iris dataset:
 #'
 #' ## Example 1
-#' ggScatRidges(x = iris$Sepal.Length, y = iris$Sepal.Width, group= iris$Species,
-#'              color = "lancet", ridges = TRUE, title = "plot iris",
-#'              xlab = "Sepal.Length", ylab = "Sepal.Width", size = 15, draw = TRUE)
+#' ggScatRidges(x = iris$Sepal.Length, y = iris$Sepal.Width, group = iris$Species,
+#'              color = "lancet", ridges = TRUE, title = "plot iris", legend.title = "Grouping",
+#'              xlab = "Sepal.Length", ylab = "Sepal.Width", base_size = 15, size = 2, 
+#'              draw = TRUE, density_2d = TRUE, legend = TRUE, label = FALSE, text = NULL)
 #'
 #' ## Example 2
-#' iris2 <- iris[,c(1,2,5)] ## The 1st column will be used as 'x', 2nd as 'y', and the 3rd as 'group'.
+#' iris2 <- iris[,c(1,2,5)] ## The three columns will respectively be used as 'x', 'y', and group.
 #' ggScatRidges(x = iris2, 
 #'              color = "lancet", ridges = TRUE, title = "plot iris",
-#'              xlab = "Sepal.Length", ylab = "Sepal.Width", size = 15, draw = TRUE) 
+#'              xlab = "Sepal.Length", ylab = "Sepal.Width", size = 2, draw = TRUE,
+#'              density_2d = FALSE, legend = TRUE, label = FALSE) 
 #'
 #' @import ggplot2
 #' @import ggpubr
@@ -37,6 +47,7 @@
 #' @import ggridges
 #' @import viridis
 #' @import hrbrthemes
+#' @import ggrepel
 #'
 #' @export
 
@@ -51,10 +62,17 @@ ggScatRidges <- function(x,
                          group = NULL,
                          color = "lancet",
                          ridges = TRUE,
-                         size = 15,
-                         draw = TRUE){
+                         base_size = 15,
+                         size = 2,
+                         pch = NULL,
+                         draw = TRUE,
+                         density_2d = TRUE,
+                         legend = TRUE,
+                         label = FALSE,
+                         legend.title = NULL,
+                         text = NULL){
   
-
+  # Check user input --------------------------------------------------------
   if(!inherits(x, "data.frame")){
     # then your x is vector and you need to get y
     if(is.null(y)){
@@ -69,80 +87,139 @@ ggScatRidges <- function(x,
     if(!inherits(y, c("double", "numeric"))){
       stop("The 'y' vector to be plotted should only contain numeric values")
     }
-    }else if(ncol(x) != 3L){
+  }else if(label){
+    if(ncol(x) != 4L){
+      stop("if 'x' is a tabular data, it should have four columns, first will be used as 'x' axis and the second column will be used as the 'y' axis. The third column will be used for grouping and the fourth for text labels.")
+    }else{
+      y <-     x[[2]]
+      group <- x[[3]]
+      text <-  x[[4]]
+      x <-     x[[1]]
+    }
+  }else {
+    if(ncol(x) != 3L){
       stop("if 'x' is a tabular data, it should have three columns, first will be used as 'x' axis and the second column will be used as the 'y' axis. The third column will be used for grouping.")
     }else{
       y <-     x[[2]]
       group <- x[[3]]
       x <-     x[[1]]
     }
+  }
+  if(!inherits(x, c("double", "numeric"))){
+    stop("The 'x' column to be plotted should only contain numeric values")
+  }
+  if(!inherits(y, c("double", "numeric"))){
+    stop("The 'y' column to be plotted should only contain numeric values")
+  }
+  if(length(group) != length(x)){
+    stop("The value of the 'group' argument should have the same length as value of 'x' argument.")
+  }
+  if(length(x) != length(y)){
+    stop("The value of the 'x' argument should have the same length as value of 'y' argument.")
+  }
+  if(label)
+    if(missing(text) & length(text) != length(x)){
+      stop("A vector must be provided to label the data points. The vector should have the same length as the 'x' vector")
+    }
+  if(min(table(group)) <= 2L){
+    warning("If the length of one or more of the group is less than 3, the ridges will not be plotted for the group(s).")
+  }
   
-    if(!inherits(x[[1]], c("double", "numeric"))){
-      stop("The 'x' column to be plotted should only contain numeric values")
-    }
-    if(!inherits(y, c("double", "numeric"))){
-      stop("The 'y' column to be plotted should only contain numeric values")
-    }
-    if(length(x[[3]]) != length(x[[1]])){
-      stop("The value of the 'group' argument should have the same length as value of 'x' argument.")
-    }
-    if(length(x[[1]]) != length(x[[2]])){
-      stop("The value of the 'x' argument should have the same length as value of 'y' argument.")
-    }
-  
-# Scatter plot ------------------------------------------------------------
+  # Scatter plot ------------------------------------------------------------
   if(ridges){
     main_plot <- ggplot(mapping = aes(x = x, y = y, col = group)) +
-      geom_point() +
+      geom_point(aes(shape = group), size = size) +
       xlab(xlab) +
       ylab(ylab) +
-      theme_minimal(base_size = size) +
+      theme_minimal(base_size = base_size) +
       theme(panel.border = element_rect(colour = "black", fill = NA, linewidth = 1)) +
       ggpubr::color_palette(color) +
       scale_x_continuous(limits = xlim) +
       scale_y_continuous(limits = ylim) +
-      ggtitle(title) +
-      geom_density2d()
-
-# Add x axis ridges -------------------------------------------------------
+      labs(colour = legend.title, shape = legend.title) +
+      ggtitle(title)
+    
+    if(density_2d){
+      main_plot <- main_plot + ggplot2::geom_density2d()}
+    
+    if(label){
+      main_plot <- main_plot + ggrepel::geom_text_repel(
+        aes(label = text),
+        show.legend = FALSE,
+        max.overlaps = Inf,
+        size=6
+      )
+    }
+    
+    if(legend == FALSE){
+      main_plot <- main_plot + theme(legend.position="none")
+    }
+    
+    if(!is.null(pch)){
+      main_plot <- main_plot + scale_shape_manual(values=pch)
+    }
+    
+    # Add x axis ridges -------------------------------------------------------
     xridges <- suppressMessages({
-      axis_canvas(main_plot, axis = "x") +
-      geom_density_ridges(mapping = aes(x = x, y = group, fill = group),
-                          alpha = 0.7, size = 0.2) +
-      ggpubr::fill_palette(color) +
-      ggplot2::scale_y_discrete(expand = c(0, 0))
-      })
-
-# Add x axis ridges -------------------------------------------------------
-    yridges <- suppressMessages({
-      axis_canvas(main_plot, axis = "y", coord_flip = TRUE)+
-      geom_density_ridges(mapping = aes(x = y, y = group, fill = group),
-                          alpha = 0.7, size = 0.2) +
-      ggpubr::fill_palette(color) +
-      scale_y_discrete(expand = c(0, 0)) +
-      coord_flip()
+      cowplot::axis_canvas(main_plot, axis = "x") +
+        geom_density_ridges(mapping = aes(x = x, y = group, fill = group),
+                            alpha = 0.7, size = 0.2) +
+        ggpubr::fill_palette(color) +
+        ggplot2::scale_y_discrete(expand = c(0, 0))
     })
-
-# Combine all plots -------------------------------------------------------
+    
+    # Add x axis ridges -------------------------------------------------------
+    yridges <- suppressMessages({
+      cowplot::axis_canvas(main_plot, axis = "y", coord_flip = TRUE)+
+        geom_density_ridges(mapping = aes(x = y, y = group, fill = group),
+                            alpha = 0.7, size = 0.2) +
+        ggpubr::fill_palette(color) +
+        scale_y_discrete(expand = c(0, 0)) +
+        coord_flip()
+    })
+    
+    # Combine all plots -------------------------------------------------------
     final <- cowplot::insert_xaxis_grob(plot = main_plot, grob = xridges, height = grid::unit(.2, "null"), position = "top") |>
       cowplot::insert_yaxis_grob(grob = yridges, width = grid::unit(.2, "null"), position = "right")
-
-# Scatter plot only if Ridges = F -----------------------------------------
+    
+    # Scatter plot only if Ridges = F -----------------------------------------
   }else{
     final <- ggplot(mapping = aes(x = x, y = y, col = group)) +
-      geom_point() +
-      theme_minimal(base_size = size) +
+      geom_point(aes(shape = group), size = size) +
+      xlab(xlab) +
+      ylab(ylab) +
+      theme_minimal(base_size = base_size) +
       theme(panel.border = element_rect(colour = "black", fill = NA, linewidth = 1)) +
       ggpubr::color_palette(color) +
       scale_x_continuous(limits = xlim) +
       scale_y_continuous(limits = ylim) +
-      ggtitle(title) +
-      geom_density2d()
+      labs(colour = legend.title, shape = legend.title) +
+      ggtitle(title)
+    
+    if(density_2d){
+      final <- final + ggplot2::geom_density2d()}
+    
+    if(label){
+      final <- final + ggrepel::geom_text_repel(
+        aes(label = text),
+        show.legend = FALSE,
+        max.overlaps = Inf,
+        size=6
+      )
+    }
+    
+    if(!is.null(pch)){
+      final <- final + scale_shape_manual(values=pch)
+    }
+    
+    if(legend == FALSE){
+      final <- final + theme(legend.position="none")
+    }
   }
-
-# Return objects ----------------------------------------------------------
+  
+  # Return objects ----------------------------------------------------------
   if(draw){
-    ggdraw(final)
+    cowplot::ggdraw(final)
   }else{
     return(invisible(final))
   }
